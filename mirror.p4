@@ -50,7 +50,7 @@ struct ingress_metadata_t {
 }
 
 struct egress_metadata_t {
-    pkt_type_t pkt_type;
+    mirror_h pkt_type;
     internal_h internal_hdr;
     MirrorId_t egr_mir_ses;   // Egress mirror session ID
 }
@@ -129,7 +129,9 @@ control SwitchIngress(
     // }
 
     apply {
+        ig_md.header_type.setValid();
         ig_md.header_type.pkt_type = PKT_TYPE_NORMAL;
+        ig_md.internal_hdr.setValid();
         ig_md.internal_hdr.ig_port = ig_intr_md.ingress_port;
         port_fwd.apply();
         // ig_md.internal_hdr.padding = 0;
@@ -178,8 +180,10 @@ parser SwitchEgressParser(
 
     state parse_metadata {
         // T lookahead<T>()：读取T类型数据大小的报头，但不前移数据报指针
-        mirror_h mirror_md = pkt.extract<mirror_h>();
-        transition select(mirror_md.pkt_type) {
+        // mirror_h mirror_md = pkt.extract<mirror_h>()
+        pkt.extract(eg_md.pkt_type);
+        eg_md.pkt_type.setValid();
+        transition select(eg_md.pkt_type.pkt_type) {
             PKT_TYPE_MIRROR : parse_mirror_md;
             PKT_TYPE_NORMAL : parse_bridge_hdr;
             default : accept;
@@ -187,6 +191,7 @@ parser SwitchEgressParser(
     }
 
     state parse_bridge_hdr {
+        eg_md.internal_hdr.setValid();
         pkt.extract(eg_md.internal_hdr);
         transition parse_ethernet;
     }
@@ -217,7 +222,8 @@ control SwitchEgress(
     action set_mirror(MirrorId_t egr_ses) {
         eg_md.egr_mir_ses = egr_ses;
         // eg_md.egr_mir_ses.setValid();
-        eg_md.pkt_type = PKT_TYPE_MIRROR;
+        // eg_md.egr_mir_ses.setValid();
+        eg_md.pkt_type.pkt_type = PKT_TYPE_MIRROR;
         eg_dprsr_md.mirror_type = MIRROR_TYPE_E2E;
         #if __TARGET_TOFINO__ != 1
             eg_dprsr_md.mirror_io_select = 1; // E2E mirroring for Tofino2 & future ASICs
@@ -231,7 +237,7 @@ control SwitchEgress(
         actions = {
             set_mirror();
         }
-        // default_action = set_mirror(RDMA_MIRROR_SESSION_1);   (不要加这句，除非你想制造DoS攻击hhh)
+        // default_action = set_mirror(RDMA_MIRROR_SESSION_1);   // (不要加这句，除非你想制造DoS攻击hhh)
         size = 16;
         const entries = {
             // 注意:修改位置2/2：
@@ -246,7 +252,10 @@ control SwitchEgress(
     }
     apply {
         PortId_t ig_port = eg_md.internal_hdr.ig_port;
-        set_mirror_session.apply();
+        if (eg_md.pkt_type.pkt_type == PKT_TYPE_NORMAL) {
+            set_mirror_session.apply();
+        }
+        // set_mirror_session.apply();
     }
 }
 
@@ -264,7 +273,7 @@ control SwitchEgressDeparser(
     apply {
 
         if (eg_dprsr_md.mirror_type == MIRROR_TYPE_E2E) {
-            egr_port_mirror.emit<mirror_h>(eg_md.egr_mir_ses, {eg_md.pkt_type});
+            egr_port_mirror.emit<mirror_h>(eg_md.egr_mir_ses, {eg_md.pkt_type.pkt_type});
         }
         pkt.emit(hdr.ethernet);
     }
