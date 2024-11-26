@@ -3,10 +3,6 @@ import os
 import sys
 import time
 
-# Shortcuts for pipes
-# switcharoo_cuckoo_pipe = bfrt.switcharoo.cuckoo
-# switcharoo_bloom_pipe = bfrt.switcharoo.bloom
-
 rdma_pipe_pipe = bfrt.rdma_test.pipe
 
 # Port defines
@@ -17,8 +13,8 @@ RDMA_PORT_3 = 160
 #################################
 ##### MIRROR SESSIONS TABLE #####
 #################################
-# In this section, we setup the mirror sessions of SWITCHAROO.
-# There is only one session, that is used to truncate/send swap operations to the Cuckoo Pipe.
+# In this section, we setup the mirror sessions.
+# There is only one session, that is used to truncate/send packets.
 PKT_MIN_LENGTH = 100
 RDMA_MIRROR_SESSION = 100
 
